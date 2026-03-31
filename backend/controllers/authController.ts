@@ -11,6 +11,15 @@ const SALT_ROUNDS = 10;
 const ACCESS_TOKEN_EXPIRY = "15m";
 const REFRESH_TOKEN_EXPIRY_DAYS = 7;
 
+const isProduction = process.env.NODE_ENV === "production";
+
+const COOKIE_OPTIONS = {
+  httpOnly: true,
+  secure: isProduction,
+  sameSite: isProduction ? ("none" as const) : ("lax" as const),
+  path: "/",
+};
+
 function generateAccessToken(user: {
   id: string;
   email: string;
@@ -38,30 +47,41 @@ function sanitiseUser(user: any) {
   return safe;
 }
 
+function setTokenCookies(res: Response, accessToken: string, refreshToken: string) {
+  res.cookie("accessToken", accessToken, {
+    ...COOKIE_OPTIONS,
+    maxAge: 15 * 60 * 1000, // 15 minutes
+  });
+  res.cookie("refreshToken", refreshToken, {
+    ...COOKIE_OPTIONS,
+    maxAge: REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60 * 1000, // 7 days
+  });
+}
+
+function clearTokenCookies(res: Response) {
+  res.clearCookie("accessToken", COOKIE_OPTIONS);
+  res.clearCookie("refreshToken", COOKIE_OPTIONS);
+}
+
 export const register = async (req: Request, res: Response): Promise<void> => {
   try {
     const { name, email, password } = req.body;
 
-    // check duplicate email
     const existing = await prisma.user.findUnique({ where: { email } });
     if (existing) {
       res.status(409).json({ error: "Email already registered." });
       return;
     }
 
-    // hash password
     const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
 
-    // create user
     const user = await prisma.user.create({
       data: { name, email, passwordHash },
     });
 
-    // generate tokens
     const accessToken = generateAccessToken(user);
     const refreshToken = generateRefreshToken(user);
 
-    // store hashed refresh token
     await prisma.userToken.create({
       data: {
         userId: user.id,
@@ -74,11 +94,8 @@ export const register = async (req: Request, res: Response): Promise<void> => {
 
     logger.info(`User registered: ${user.email}`);
 
-    res.status(201).json({
-      user: sanitiseUser(user),
-      accessToken,
-      refreshToken,
-    });
+    setTokenCookies(res, accessToken, refreshToken);
+    res.status(201).json({ user: sanitiseUser(user) });
   } catch (err) {
     logger.error("Register error:", err);
     res.status(500).json({ error: "Internal server error." });
@@ -101,11 +118,9 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    // generate tokens
     const accessToken = generateAccessToken(user);
     const refreshToken = generateRefreshToken(user);
 
-    // store hashed refresh token
     await prisma.userToken.create({
       data: {
         userId: user.id,
@@ -118,11 +133,8 @@ export const login = async (req: Request, res: Response): Promise<void> => {
 
     logger.info(`User logged in: ${user.email}`);
 
-    res.json({
-      user: sanitiseUser(user),
-      accessToken,
-      refreshToken,
-    });
+    setTokenCookies(res, accessToken, refreshToken);
+    res.json({ user: sanitiseUser(user) });
   } catch (err) {
     logger.error("Login error:", err);
     res.status(500).json({ error: "Internal server error." });
@@ -131,23 +143,22 @@ export const login = async (req: Request, res: Response): Promise<void> => {
 
 export const refresh = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { refreshToken } = req.body;
+    const refreshToken = req.cookies?.refreshToken;
 
     if (!refreshToken) {
       res.status(400).json({ error: "Refresh token is required." });
       return;
     }
 
-    // verify JWT signature
     let decoded: any;
     try {
       decoded = jwt.verify(refreshToken, config.JWT_REFRESH_SECRET);
     } catch {
+      clearTokenCookies(res);
       res.status(401).json({ error: "Invalid refresh token." });
       return;
     }
 
-    // find matching token in DB
     const tokenHash = hashToken(refreshToken);
     const storedToken = await prisma.userToken.findFirst({
       where: {
@@ -159,20 +170,24 @@ export const refresh = async (req: Request, res: Response): Promise<void> => {
     });
 
     if (!storedToken) {
+      clearTokenCookies(res);
       res.status(401).json({ error: "Refresh token not found or revoked." });
       return;
     }
 
-    // check expiry
     if (storedToken.expiresAt < new Date()) {
+      clearTokenCookies(res);
       res.status(401).json({ error: "Refresh token expired." });
       return;
     }
 
-    // generate new access token
     const accessToken = generateAccessToken(storedToken.user);
 
-    res.json({ accessToken });
+    res.cookie("accessToken", accessToken, {
+      ...COOKIE_OPTIONS,
+      maxAge: 15 * 60 * 1000,
+    });
+    res.json({ message: "Token refreshed." });
   } catch (err) {
     logger.error("Refresh error:", err);
     res.status(500).json({ error: "Internal server error." });
@@ -181,21 +196,17 @@ export const refresh = async (req: Request, res: Response): Promise<void> => {
 
 export const logout = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { refreshToken } = req.body;
+    const refreshToken = req.cookies?.refreshToken;
 
-    if (!refreshToken) {
-      res.status(400).json({ error: "Refresh token is required." });
-      return;
+    if (refreshToken) {
+      const tokenHash = hashToken(refreshToken);
+      await prisma.userToken.updateMany({
+        where: { refreshTokenHash: tokenHash },
+        data: { isRevoked: true },
+      });
     }
 
-    const tokenHash = hashToken(refreshToken);
-
-    // revoke the token
-    await prisma.userToken.updateMany({
-      where: { refreshTokenHash: tokenHash },
-      data: { isRevoked: true },
-    });
-
+    clearTokenCookies(res);
     res.json({ message: "Logged out successfully." });
   } catch (err) {
     logger.error("Logout error:", err);

@@ -1,5 +1,6 @@
 import express from "express";
 import cors from "cors";
+import cookieParser from "cookie-parser";
 import logger from "./utils/logger";
 import { config } from "./utils/config";
 
@@ -20,6 +21,7 @@ app.use(
 );
 
 app.use(express.json());
+app.use(cookieParser());
 
 // request logger
 app.use((req, _res, next) => {

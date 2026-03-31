@@ -5,29 +5,19 @@ const API_BASE = import.meta.env.VITE_BACKEND_URL;
 const api = axios.create({
   baseURL: API_BASE,
   headers: { "Content-Type": "application/json" },
-});
-
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem("accessToken");
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
+  withCredentials: true,
 });
 
 let isRefreshing = false;
 let failedQueue: {
-  resolve: (token: string) => void;
+  resolve: () => void;
   reject: (err: AxiosError) => void;
 }[] = [];
 
-const processQueue = (
-  error: AxiosError | null,
-  token: string | null = null,
-) => {
+const processQueue = (error: AxiosError | null) => {
   failedQueue.forEach(({ resolve, reject }) => {
     if (error) reject(error);
-    else resolve(token!);
+    else resolve();
   });
   failedQueue = [];
 };
@@ -45,10 +35,9 @@ api.interceptors.response.use(
       !originalRequest._retry
     ) {
       if (isRefreshing) {
-        return new Promise((resolve, reject) => {
+        return new Promise<void>((resolve, reject) => {
           failedQueue.push({ resolve, reject });
-        }).then((token) => {
-          originalRequest.headers.Authorization = `Bearer ${token}`;
+        }).then(() => {
           return api(originalRequest);
         });
       }
@@ -57,18 +46,11 @@ api.interceptors.response.use(
       isRefreshing = true;
 
       try {
-        const refreshToken = localStorage.getItem("refreshToken");
-        const { data } = await axios.post(`${API_BASE}/auth/refresh`, {
-          refreshToken,
-        });
-        localStorage.setItem("accessToken", data.accessToken);
-        processQueue(null, data.accessToken);
-        originalRequest.headers.Authorization = `Bearer ${data.accessToken}`;
+        await api.post("/auth/refresh");
+        processQueue(null);
         return api(originalRequest);
       } catch (refreshError) {
-        processQueue(refreshError as AxiosError, null);
-        localStorage.removeItem("accessToken");
-        localStorage.removeItem("refreshToken");
+        processQueue(refreshError as AxiosError);
         window.location.href = "/login";
         return Promise.reject(refreshError);
       } finally {
@@ -85,7 +67,7 @@ export const authAPI = {
     api.post("/auth/register", data),
   login: (data: { email: string; password: string }) =>
     api.post("/auth/login", data),
-  logout: (refreshToken: string) => api.post("/auth/logout", { refreshToken }),
+  logout: () => api.post("/auth/logout"),
   getMe: () => api.get("/auth/me"),
 };
 

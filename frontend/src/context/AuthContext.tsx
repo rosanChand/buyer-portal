@@ -31,44 +31,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const token = localStorage.getItem("accessToken");
-    if (token) {
-      authAPI
-        .getMe()
-        .then(({ data }) => setUser(data.user))
-        .catch(() => {
-          localStorage.removeItem("accessToken");
-          localStorage.removeItem("refreshToken");
-        })
-        .finally(() => setLoading(false));
-    } else {
-      setLoading(false);
-    }
+    authAPI
+      .getMe()
+      .then(({ data }) => setUser(data.user))
+      .catch(() => setUser(null))
+      .finally(() => setLoading(false));
   }, []);
 
   const login = async (email: string, password: string) => {
     const { data } = await authAPI.login({ email, password });
-    localStorage.setItem("accessToken", data.accessToken);
-    localStorage.setItem("refreshToken", data.refreshToken);
     setUser(data.user);
   };
 
   const register = async (name: string, email: string, password: string) => {
     const { data } = await authAPI.register({ name, email, password });
-    localStorage.setItem("accessToken", data.accessToken);
-    localStorage.setItem("refreshToken", data.refreshToken);
     setUser(data.user);
   };
 
   const logout = async () => {
     try {
-      const refreshToken = localStorage.getItem("refreshToken");
-      if (refreshToken) await authAPI.logout(refreshToken);
+      await authAPI.logout();
     } catch {
       // ignore
     }
-    localStorage.removeItem("accessToken");
-    localStorage.removeItem("refreshToken");
     setUser(null);
   };
 
