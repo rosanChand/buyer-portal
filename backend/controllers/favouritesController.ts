@@ -63,7 +63,7 @@ export const removeFavourite = async (
   res: Response,
 ): Promise<void> => {
   try {
-    const { propertyId } = req.params;
+    const propertyId = req.params.propertyId as string;
     const userId = req.user!.id;
 
     // find favourite belonging to this user
