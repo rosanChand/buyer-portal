@@ -2,6 +2,10 @@
 
 A real-estate buyer portal where users can register, browse properties, and manage a personal favourites list.
 
+**Frontend:** https://buyer-portal-git-main-roshans-projects-c0f003e2.vercel.app/
+
+**Backend API:** https://buyer-portal-x4dd.onrender.com/
+
 **Stack:** React + TypeScript + Vite (frontend), Express + TypeScript + Prisma (backend), PostgreSQL (Supabase)
 
 ## How to Run
