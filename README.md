@@ -2,7 +2,7 @@
 
 A real-estate buyer portal where users can register, browse properties, and manage a personal favourites list.
 
-**Frontend:** https://buyer-portal-git-main-roshans-projects-c0f003e2.vercel.app/
+**Frontend:** https://buyer-portal-zeta.vercel.app/
 
 **Backend API:** https://buyer-portal-x4dd.onrender.com/
 
@@ -29,7 +29,7 @@ JWT_REFRESH_SECRET=your_refresh_secret
 
 **`frontend/.env`**
 ```env
-BACKEND_URL=http://localhost:3000/api
+VITE_BACKEND_URL=http://localhost:3000/api
 ```
 
 ### 3. Run database migrations and seed
