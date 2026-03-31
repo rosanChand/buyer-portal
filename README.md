@@ -21,10 +21,12 @@ cd ../frontend && npm install
 
 **`backend/.env`**
 ```env
-DATABASE_URL=postgresql://user:password@host:5432/dbname
+
+DATABASE_URL=postgresql://user:password@aws-0-xxxx.pooler.supabase.com:6543/dbname?pgbouncer=true
 PORT=3000
 JWT_SECRET=your_secret
 JWT_REFRESH_SECRET=your_refresh_secret
+FRONTEND_URL=http://localhost:5173
 ```
 
 **`frontend/.env`**
