@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import logger from "./utils/logger";
+import { config } from "./utils/config";
 
 // routes
 import authRoutes from "./routes/auth";
@@ -13,7 +14,7 @@ const app = express();
 
 app.use(
   cors({
-    origin: ["http://localhost:5173"],
+    origin: [config.FRONTEND_URL],
     credentials: true,
   }),
 );
